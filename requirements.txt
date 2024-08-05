@@ -1,0 +1,11 @@
+streamlit
+python-docx
+openai
+pinecone-client
+tiktoken
+uuid
+pandas
+cdifflib
+TIME-python
+random2
+db-sqlite3
