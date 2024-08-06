@@ -244,15 +244,6 @@ def generate_multi_intent_answer(query, intent_data):
 8. Encourage critical thinking by guiding students towards understanding rather than simply providing direct answers.
 9. Respect academic integrity by not writing essays or completing assignments on behalf of students.
 10. Suggest additional resources only if directly relevant to the primary query.
-11. Structure your responses for clarity:
-    a. Start with a direct answer to the query
-    b. Provide supporting details and explanations
-    c. List relevant documents and explain their connection to the query
-    d. Conclude with any necessary  suggestions for further research
-12. If multiple documents are relevant, prioritize and summarize the most important information from each.
-13. Use bullet points or numbered lists for complex information to enhance readability.
-14. If a query is ambiguous, ask for clarification before providing an answer.
-15. Always strive for efficiency in your answers: be thorough but avoid unnecessary verbosity.
 """},
             {"role": "user", "content": f"Query: {query}\n\nContext: {truncated_context}"}
         ]
