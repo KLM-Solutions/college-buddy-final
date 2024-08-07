@@ -17,6 +17,9 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.callbacks import get_openai_callback
 
+# Load environment variables
+load_dotenv()
+
 # Access your API keys
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
