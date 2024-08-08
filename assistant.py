@@ -391,5 +391,5 @@ def main():
                 st.write(f"A: {a}")
 
 if __name__ == "__main__":
-    with trace(name="College_Buddy_Session", client=langsmith_client) as root_run:
+    with trace(name="College_Buddy_Assistant", client=langsmith_client) as root_run:
         main()
