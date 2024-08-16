@@ -329,7 +329,7 @@ def main():
     init_db(conn)
     load_initial_data()
 
-    # Sidebar for file upload and metadata
+   # Sidebar for file upload and metadata
     with st.sidebar:
         st.header("Upload Documents")
         uploaded_files = st.file_uploader("Upload the Word Documents (DOCX)", type="docx", accept_multiple_files=True)
@@ -358,6 +358,7 @@ def main():
     for question in st.session_state.selected_questions:
         if st.button(question, key=question):
             st.session_state.current_question = question
+            st.experimental_rerun()  # Rerun the script to clear previous output
 
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
@@ -365,6 +366,7 @@ def main():
     if st.button("Get Answer"):
         if user_query:
             st.session_state.current_question = user_query
+            st.experimental_rerun()  # Rerun the script to clear previous output
         elif 'current_question' not in st.session_state:
             st.warning("Please enter a question or select a popular question before searching.")
 
