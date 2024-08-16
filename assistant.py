@@ -370,71 +370,63 @@ def main():
         st.session_state.last_query = user_query
 
     # Create placeholders for dynamic content
-    content_placeholder = st.empty()
+    question_placeholder = st.empty()
+    answer_placeholder = st.empty()
+    keywords_container = st.container()
+    documents_container = st.container()
 
     if 'trigger_query' in st.session_state and st.session_state.trigger_query:
-        with content_placeholder.container():
-            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                answer, intent_data, keywords = get_answer(st.session_state.current_question)
-                run.end(outputs={"answer": answer})
-            
-            st.session_state.current_answer = answer
-            st.session_state.current_keywords = keywords
-            st.session_state.current_intent_data = intent_data
-            st.session_state.show_answer = True
-            st.session_state.trigger_query = False
+        with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+            answer, intent_data, keywords = get_answer(st.session_state.current_question)
+            run.end(outputs={"answer": answer})
+        
+        st.session_state.current_answer = answer
+        st.session_state.current_keywords = keywords
+        st.session_state.current_intent_data = intent_data
+        st.session_state.show_answer = True
+        st.session_state.trigger_query = False
 
     if 'show_answer' in st.session_state and st.session_state.show_answer:
-        with content_placeholder.container():
-            st.markdown("## Question:")
-            st.write(st.session_state.current_question)
-            
-            st.markdown("## Answer:")
-            formatted_chunks = format_response(st.session_state.current_answer)
-            
-            # Use asyncio to run the streaming response
-            async def display_streaming_response():
-                response_buffer = ""
-                for chunk_type, content in formatted_chunks:
-                    if chunk_type == "bullet":
-                        response_buffer += f"- {content}\n"
-                    elif chunk_type == "number":
-                        response_buffer += f"1. {content}\n"
-                    elif chunk_type == "header":
-                        level, text = content
-                        response_buffer += f"{'#' * level} {text}\n\n"
-                    elif chunk_type == "text":
-                        response_buffer += f"{content}\n\n"
-                    st.markdown(response_buffer)
-                    await asyncio.sleep(0.1)
-            
-            # Run the streaming response
-            asyncio.run(display_streaming_response())
-            
-            st.markdown("## Related Keywords:")
+        question_placeholder.subheader("Question:")
+        question_placeholder.write(st.session_state.current_question)
+        
+        answer_placeholder.subheader("Answer:")
+        formatted_chunks = format_response(st.session_state.current_answer)
+        
+        # Use asyncio to run the streaming response
+        async def display_streaming_response():
+            async for response_buffer in stream_formatted_response(formatted_chunks):
+                answer_placeholder.markdown(response_buffer)
+        
+        # Run the streaming response
+        asyncio.run(display_streaming_response())
+        
+        with keywords_container:
+            st.subheader("Related Keywords:")
             st.write(", ".join(st.session_state.current_keywords))
-            
-            st.markdown("## Related Documents:")
+        
+        with documents_container:
+            st.subheader("Related Documents:")
             displayed_docs = set()
             for intent, data in st.session_state.current_intent_data.items():
                 for score, doc in data['db_results']:
                     if doc[0] not in displayed_docs:
                         displayed_docs.add(doc[0])
                         with st.expander(f"Document: {doc[1]}"):
-                            st.write(f"**ID:** {doc[0]}")
-                            st.write(f"**Title:** {doc[1]}")
-                            st.write(f"**Tags:** {doc[2]}")
-                            st.write(f"**Link:** {doc[3]}")
+                            st.write(f"ID: {doc[0]}")
+                            st.write(f"Title: {doc[1]}")
+                            st.write(f"Tags: {doc[2]}")
+                            st.write(f"Link: {doc[3]}")
                             
                             highlighted_tags = doc[2]
                             for keyword in st.session_state.current_keywords:
                                 highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
-                            st.markdown(f"**Matched Tags:** {highlighted_tags}")
+                            st.markdown(f"Matched Tags: {highlighted_tags}")
 
-            # Add to chat history
-            if 'chat_history' not in st.session_state:
-                st.session_state.chat_history = []
-            st.session_state.chat_history.append((st.session_state.current_question, st.session_state.current_answer))
+        # Add to chat history
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+        st.session_state.chat_history.append((st.session_state.current_question, st.session_state.current_answer))
 
     # Add a section for displaying recent questions and answers
     if 'chat_history' in st.session_state and st.session_state.chat_history:
