@@ -39,7 +39,7 @@ pc = Pinecone(api_key=PINECONE_API_KEY)
 langsmith_client = Client(api_key=LANGCHAIN_API_KEY)
 chat = ChatOpenAI(model_name="gpt-4", temperature=0.3, streaming=True)
 embeddings = OpenAIEmbeddings()
-
+client = OpenAI(api_key=OPENAI_API_KEY)
 # Create or connect to the Pinecone index
 if INDEX_NAME not in pc.list_indexes().names():
     pc.create_index(
@@ -220,13 +220,14 @@ def query_for_multiple_intents(intent_keywords):
         }
     return intent_data
 
+
 @safe_run_tree(name="generate_multi_intent_answer", run_type="llm")
 def generate_multi_intent_answer(query, intent_data):
     context = "\n".join([f"Intent: {intent}\nDB Results: {data['db_results']}\nPinecone Context: {data['pinecone_context']}" for intent, data in intent_data.items()])
     max_context_tokens = 4000
     truncated_context = truncate_text(context, max_context_tokens)
     
-    system_message = SystemMessage(content="""You are College Buddy, an AI assistant designed to help students with their academic queries. Your primary function is to analyze and provide insights based on the context of uploaded documents. Please adhere to the following guidelines:
+    system_message = """You are College Buddy, an AI assistant designed to help students with their academic queries. Your primary function is to analyze and provide insights based on the context of uploaded documents. Please adhere to the following guidelines:
 1. Focus on addressing the primary intent of the query.
 2. Provide accurate, relevant information derived from the provided context.
 3. If the context doesn't contain sufficient information to answer the query, state this clearly.
@@ -236,15 +237,23 @@ def generate_multi_intent_answer(query, intent_data):
 7. Encourage critical thinking by guiding students towards understanding rather than simply providing direct answers.
 8. Respect academic integrity by not writing essays or completing assignments on behalf of students.
 9. Suggest additional resources only if directly relevant to the primary query.
-""")
-    human_message = HumanMessage(content=f"Query: {query}\n\nContext: {truncated_context}")
+"""
+    human_message = f"Query: {query}\n\nContext: {truncated_context}"
     
-    messages = [system_message, human_message]
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": human_message}
+    ]
     
-    for chunk in chat.stream(messages):
+    stream = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        stream=True
+    )
+    
+    for chunk in stream:
         if chunk.choices[0].delta.content is not None:
             yield chunk.choices[0].delta.content
-
 @safe_run_tree(name="extract_keywords_from_response", run_type="llm")
 def extract_keywords_from_response(response):
     system_message = SystemMessage(content="You are a keyword extraction assistant. Extract key terms or phrases from the given text.")
@@ -255,6 +264,7 @@ def extract_keywords_from_response(response):
     
     keywords = keyword_response.content.strip().split(',')
     return [keyword.strip() for keyword in keywords]
+
 
 @safe_run_tree(name="get_answer", run_type="chain")
 def get_answer(query):
