@@ -318,7 +318,7 @@ def main():
         elif 'current_question' not in st.session_state:
             st.warning("Please enter a question or select a popular question before searching.")
 
-   if 'current_question' in st.session_state:
+    if 'current_question' in st.session_state:
     with st.spinner("Searching for the best answer..."):
         with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
             stream, intent_data, keywords = get_answer(st.session_state.current_question)
