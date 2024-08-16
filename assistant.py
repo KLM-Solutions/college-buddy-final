@@ -361,13 +361,24 @@ def main():
             st.session_state.show_answer = False
 
     st.header("Ask Your Own Question")
-    user_query = st.text_input("What would you like to know about the uploaded documents?")
+    
+    # Initialize the query input in session state if it doesn't exist
+    if 'query_input' not in st.session_state:
+        st.session_state.query_input = ''
 
-    if user_query and user_query != st.session_state.get('last_query', ''):
-        st.session_state.current_question = user_query
-        st.session_state.trigger_query = True
-        st.session_state.show_answer = False
-        st.session_state.last_query = user_query
+    # Function to process query and clear input
+    def process_query():
+        if st.session_state.query_input:
+            st.session_state.current_question = st.session_state.query_input
+            st.session_state.trigger_query = True
+            st.session_state.show_answer = False
+            st.session_state.last_query = st.session_state.query_input
+            st.session_state.query_input = ''  # Clear the input box
+
+    # Text input for user query
+    user_query = st.text_input("What would you like to know about the uploaded documents?", 
+                               key="query_input", 
+                               on_change=process_query)
 
     # Create placeholders for dynamic content
     question_placeholder = st.empty()
