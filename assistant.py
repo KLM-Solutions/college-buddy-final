@@ -326,7 +326,9 @@ def main():
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
 
-   if st.button("Get Answer"):
+   
+
+    if st.button("Get Answer"):
         if user_query:
             st.session_state.current_question = user_query
         elif 'current_question' not in st.session_state:
