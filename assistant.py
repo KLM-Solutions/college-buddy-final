@@ -330,15 +330,22 @@ def main():
                 answer_placeholder = st.empty()
                 full_answer = ""
                 for chunk in stream:
-                    if chunk.choices[0].delta.content is not None:
-                        full_answer += chunk.choices[0].delta.content
+                    st.write(f"Debug: Chunk type: {type(chunk)}")
+                    st.write(f"Debug: Chunk content: {chunk}")
+                   if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                    content = chunk.choices[0].delta.content
+                    if content is not None:
+                        full_answer += content
                         answer_placeholder.markdown(full_answer + "▌")
+                else:
+                    st.write(f"Debug: Unexpected chunk structure: {chunk}")
                 answer_placeholder.markdown(full_answer)
                 
                 run.end(outputs={"answer": full_answer})
             
             st.subheader("Related Keywords:")
             st.write(", ".join(keywords))
+            
             st.subheader("Related Documents:")
             displayed_docs = set()
             for intent, data in intent_data.items():
@@ -370,6 +377,24 @@ def main():
         for i, (q, a) in enumerate(reversed(st.session_state.chat_history[-5:])):
             with st.expander(f"Q: {q}"):
                 st.write(f"A: {a}")
+
+    # Add feedback system
+    def add_feedback_system():
+        st.subheader("Was this answer helpful?")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("👍 Yes"):
+                st.success("Thank you for your feedback!")
+                # You could log positive feedback here
+        with col2:
+            if st.button("👎 No"):
+                st.warning("We're sorry the answer wasn't helpful.")
+                feedback = st.text_area("Please let us know how we can improve:")
+                if st.button("Submit Feedback"):
+                    # You could log the feedback here
+                    st.success("Thank you for your feedback!")
+
+    add_feedback_system()
 
 if __name__ == "__main__":
     with trace(name="College_Buddy_Assistant", client=langsmith_client) as root_run:
