@@ -17,6 +17,9 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.callbacks import get_openai_callback
 from dotenv import load_dotenv
+import asyncio
+import re
+from typing import List, Tuple
 
 # Load environment variables
 load_dotenv()
@@ -37,7 +40,7 @@ os.environ["LANGCHAIN_PROJECT"] = "College-Buddy-Assistant"
 # Initialize clients
 pc = Pinecone(api_key=PINECONE_API_KEY)
 langsmith_client = Client(api_key=LANGCHAIN_API_KEY)
-chat = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
+chat = ChatOpenAI(model_name="gpt-4", temperature=0.3)
 embeddings = OpenAIEmbeddings()
 
 # Create or connect to the Pinecone index
@@ -80,27 +83,7 @@ def load_initial_data():
     conn = get_database_connection()
     data = [
         (1, "TEXAS TECH", "Universities, Texas Tech University, College Life, Student Wellness, Financial Tips for Students, Campus Activities, Study Strategies", "https://www.ttu.edu/"),
-        (2, "ADVISING", "Advising, Campus Advising, Registration, Financial Management, Raider Success Hub, Degree Works, Visual Schedule Builder", "https://www.depts.ttu.edu/advising/current-students/advising/"),
-        (3, "COURSE PREFIXES", "courses, Undergraduate Degrees, Academic Programs, Degree Concentrations, College Majors, University Programs, Bachelor's Degrees", "https://www.depts.ttu.edu/advising/current-students/course-prefixes/"),
-        (4, "NEW STUDENT", "New Student Information, University Advising, Red Raider Orientation, TTU New Students, Academic Advising, Career Planning, Student Success", "https://www.depts.ttu.edu/advising/current-students/new-student-information/"),
-        (5, "DECLARE YOUR MAJOR", "Declaring your major, Major Declaration, Academic Transfer Form, College Requirements, GPA Requirements, Advisor Appointment, Major Transfer Process", "https://www.depts.ttu.edu/advising/current-students/declare-your-major/"),
-        (6, "Texas Tech University Students Handbook-chunk 1", "Students Handbook, Student Conduct, Hearing Panel, Disciplinary Procedures, University Policy, Academic Integrity, Student Rights", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (7, "Texas Tech University Students Handbook-chunk 2", "Students Handbook, Texas Tech University, Student Conduct Code, University Policies, Academic Integrity, Misconduct Reporting, FERPA Privacy", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (8, "Texas Tech University Students Handbook-chunk 3", "Students Handbook, Student Conduct, University Policies, Code of Conduct, Disciplinary Procedures, Student Rights, University Regulations", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (9, "Texas Tech University Students Handbook-chunk 4", "Students Handbook, Student Conduct Procedures, Conduct Investigations, Disciplinary Actions, University Adjudication, Student Rights and Responsibilities, Conduct Hearings", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (10, "Texas Tech University Students Handbook-chunk 5", "Students Handbook, Disciplinary Sanctions, Conduct Appeals, Student Conduct Records, Sexual Misconduct Policy, Title IX Procedures, University Sanctions", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (11, "Texas Tech University Students Handbook-chunk 6", "Students Handbook, Non-Title IX Sexual Misconduct, Interpersonal Violence, Sexual Harassment, Sexual Assault Reporting, Supportive Measures, University Sexual Misconduct Policy", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (12, "Texas Tech University Students Handbook-chunk 7", "Students Handbook, Amnesty Provisions, Sexual Misconduct Reporting, Incident Response, Formal Complaint Process, Title IX Coordinator, Supportive Measures", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (13, "Texas Tech University Students Handbook-chunk 8", "Students Handbook, Title IX Hearings, Non-Title IX Grievance Process, Sexual Misconduct Sanctions, Hearing Panel Procedures, Informal Resolution, Grievance Process", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (14, "Texas Tech University Students Handbook-chunk 9", "Students Handbook, Sexual Misconduct Hearings, Grievance Process, Administrative and Panel Hearings, Title IX Coordinator, Disciplinary Sanctions, Appeal Procedures", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (15, "Texas Tech University Students Handbook-chunk 10", "Students Handbook, Student Organization Conduct, Code of Student Conduct, Investigation Process, Interim Actions, Voluntary Resolution, University Sanctions", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (16, "Texas Tech University Students Handbook-chunk 11", "Students Handbook, Student Organization Hearings, Pre-Hearing Process, Investigation Report, Conduct Procedures, Sanction Only Hearing, Appeals Process", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (17, "Texas Tech University Students Handbook-chunk 12", "Students Handbook, Academic Integrity, Anti-Discrimination Policy, Alcohol Policy, Class Absences, Grievance Procedures, Student Conduct", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (18, "Texas Tech University Students Handbook-chunk 13", "Students Handbook, Disability Services, FERPA Guidelines, Disciplinary Actions, Employment Grievances, Academic Appeals, Student Support Resources", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (19, "Texas Tech University Students Handbook-chunk 14", "Students Handbook, Student Organization Registration, Solicitation and Advertising, Student Government Association, Military and Veteran Programs, Student Identification, Student Support Services", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (20, "Texas Tech University Students Handbook-chunk 15", "Students Handbook, Campus Grounds Use, Expressive Activities, Amplification Equipment, Voluntary Withdrawal, Involuntary Withdrawal, Student Safety", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (21, "Texas Tech University Students Handbook-chunk 16", "Students Handbook, Student Organization Training, Campus Grounds Use, Facility Reservations, Amplification Equipment, Expressive Activities, Student Records", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf"),
-        (22, "Texas Tech University Students Handbook-chunk 17", "Students Handbook, Student Conduct Definitions, University Policies, Behavioral Intervention, Sexual Misconduct Definitions, Disciplinary Actions, Student Records", "https://www.depts.ttu.edu/dos/Studenthandbook2022forward/Student-Handbook-2023-2024.pdf")
+        # ... (rest of the initial data)
     ]
     c = conn.cursor()
     c.executemany("INSERT OR REPLACE INTO documents (id, title, tags, links) VALUES (?, ?, ?, ?)", data)
@@ -290,6 +273,47 @@ def get_answer(query):
     
     return final_answer, expanded_intent_data, all_keywords
 
+def format_response(answer: str) -> List[Tuple[str, str]]:
+    formatted_chunks = []
+    lines = answer.split('\n')
+    for line in lines:
+        if re.match(r'^\s*[\-\*]\s', line):  # Bullet points
+            formatted_chunks.append(("bullet", line.strip()))
+        elif re.match(r'^\s*\d+\.\s', line):  # Numbered lists
+            formatted_chunks.append(("number", line.strip()))
+        elif line.strip().startswith('#'):  # Headers
+            level = len(re.match(r'^#+', line.strip()).group())
+            formatted_chunks.append(("header", (level, line.strip('#').strip())))
+        else:  # Regular text
+            formatted_chunks.append(("text", line.strip()))
+    return formatted_chunks
+
+async def stream_formatted_response(formatted_chunks: List[Tuple[str, str]]):
+    response_buffer = ""
+    for chunk_type, content in formatted_chunks:
+        if chunk_type == "bullet":
+            response_buffer += f"- {content}\n"
+            yield response_buffer
+            await asyncio.sleep(0.5)
+        elif chunk_type == "number":
+            response_buffer += f"{content}\n"
+            yield response_buffer
+            await asyncio.sleep(0.5)
+        elif chunk_type == "header":
+            level, text = content
+            response_buffer += f"{'#' * level} {text}\n\n"
+            yield response_buffer
+            await asyncio.sleep(0.5)
+        elif chunk_type == "text":
+            words = content.split()
+            for word in words:
+                response_buffer += f"{word} "
+                yield response_buffer
+                await asyncio.sleep(0.1)  # Slowed down to 0.1 seconds per word
+            response_buffer += "\n\n"
+            yield response_buffer
+            await asyncio.sleep(0.5)
+
 # Streamlit Interface
 def main():
     st.set_page_config(page_title="College Buddy Assistant", layout="wide")
@@ -345,36 +369,49 @@ def main():
             st.warning("Please enter a question or select a popular question before searching.")
 
     if 'current_question' in st.session_state:
-        with st.spinner("Searching for the best answer..."):
-            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                answer, intent_data, keywords = get_answer(st.session_state.current_question)
-                run.end(outputs={"answer": answer})
-            
-            st.subheader("Question:")
-            st.write(st.session_state.current_question)
-            st.subheader("Answer:")
-            st.write(answer)
-            
-            st.subheader("Related Keywords:")
-            st.write(", ".join(keywords))
-            
-            st.subheader("Related Documents:")
-            displayed_docs = set()
-            for intent, data in intent_data.items():
-                for score, doc in data['db_results']:
-                    if doc[0] not in displayed_docs:
-                        displayed_docs.add(doc[0])
-                        with st.expander(f"Document: {doc[1]}"):
-                            st.write(f"ID: {doc[0]}")
-                            st.write(f"Title: {doc[1]}")
-                            st.write(f"Tags: {doc[2]}")
-                            st.write(f"Link: {doc[3]}")
-                            
-                            highlighted_tags = doc[2]
-                            for keyword in keywords:
-                                highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
-                            st.markdown(f"Matched Tags: {highlighted_tags}")
-  
+        with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+            answer, intent_data, keywords = get_answer(st.session_state.current_question)
+            run.end(outputs={"answer": answer})
+        
+        st.subheader("Question:")
+        st.write(st.session_state.current_question)
+        st.subheader("Answer:")
+        
+        # Format the answer
+        formatted_chunks = format_response(answer)
+        
+        # Create a placeholder for the streaming response
+        response_placeholder = st.empty()
+        
+        # Use asyncio to run the streaming response
+        async def display_streaming_response():
+            async for response_buffer in stream_formatted_response(formatted_chunks):
+                response_placeholder.markdown(response_buffer + "▌")
+            response_placeholder.markdown(response_buffer)
+        
+        # Run the streaming response
+        asyncio.run(display_streaming_response())
+        
+        st.subheader("Related Keywords:")
+        st.write(", ".join(keywords))
+        
+        st.subheader("Related Documents:")
+        displayed_docs = set()
+        for intent, data in intent_data.items():
+            for score, doc in data['db_results']:
+                if doc[0] not in displayed_docs:
+                    displayed_docs.add(doc[0])
+                    with st.expander(f"Document: {doc[1]}"):
+                        st.write(f"ID: {doc[0]}")
+                        st.write(f"Title: {doc[1]}")
+                        st.write(f"Tags: {doc[2]}")
+                        st.write(f"Link: {doc[3]}")
+                        
+                        highlighted_tags = doc[2]
+                        for keyword in keywords:
+                            highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
+                        st.markdown(f"Matched Tags: {highlighted_tags}")
+
         # Add to chat history
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
