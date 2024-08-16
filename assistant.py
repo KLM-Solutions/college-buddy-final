@@ -18,7 +18,8 @@ from langchain.schema import HumanMessage, SystemMessage
 from langchain.callbacks import get_openai_callback
 from dotenv import load_dotenv
 import asyncio
-from typing import AsyncIterable
+import re
+from typing import List, Tuple
 
 # Load environment variables
 load_dotenv()
@@ -272,11 +273,36 @@ def get_answer(query):
     
     return final_answer, expanded_intent_data, all_keywords
 
-async def generate_streaming_response(answer: str) -> AsyncIterable[str]:
-    words = answer.split()
-    for word in words:
-        yield word + " "
-        await asyncio.sleep(0.05)  # Adjust the delay as needed
+def format_response(answer: str) -> List[Tuple[str, str]]:
+    formatted_chunks = []
+    lines = answer.split('\n')
+    for line in lines:
+        if re.match(r'^\s*[\-\*]\s', line):  # Bullet points
+            formatted_chunks.append(("bullet", line.strip()))
+        elif re.match(r'^\s*\d+\.\s', line):  # Numbered lists
+            formatted_chunks.append(("number", line.strip()))
+        elif line.strip().startswith('#'):  # Headers
+            level = len(re.match(r'^#+', line.strip()).group())
+            formatted_chunks.append(("header", (level, line.strip('#').strip())))
+        else:  # Regular text
+            formatted_chunks.append(("text", line.strip()))
+    return formatted_chunks
+
+async def stream_formatted_response(formatted_chunks: List[Tuple[str, str]]):
+    response_buffer = ""
+    for chunk_type, content in formatted_chunks:
+        if chunk_type == "bullet":
+            response_buffer += f"- {content}\n"
+        elif chunk_type == "number":
+            response_buffer += f"{content}\n"
+        elif chunk_type == "header":
+            level, text = content
+            response_buffer += f"{'#' * level} {text}\n\n"
+        elif chunk_type == "text":
+            response_buffer += f"{content}\n\n"
+        
+        yield response_buffer
+        await asyncio.sleep(0.1)
 
 # Streamlit Interface
 def main():
@@ -326,8 +352,6 @@ def main():
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
 
-   
-
     if st.button("Get Answer"):
         if user_query:
             st.session_state.current_question = user_query
@@ -344,16 +368,17 @@ def main():
             st.write(st.session_state.current_question)
             st.subheader("Answer:")
             
+            # Format the answer
+            formatted_chunks = format_response(answer)
+            
             # Create a placeholder for the streaming response
             response_placeholder = st.empty()
             
             # Use asyncio to run the streaming response
             async def display_streaming_response():
-                full_response = ""
-                async for word in generate_streaming_response(answer):
-                    full_response += word
-                    response_placeholder.markdown(full_response + "▌")
-                response_placeholder.markdown(full_response)
+                async for response_buffer in stream_formatted_response(formatted_chunks):
+                    response_placeholder.markdown(response_buffer + "▌")
+                response_placeholder.markdown(response_buffer)
             
             # Run the streaming response
             asyncio.run(display_streaming_response())
