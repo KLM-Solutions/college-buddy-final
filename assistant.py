@@ -369,11 +369,11 @@ def main():
         st.session_state.show_answer = False
         st.session_state.last_query = user_query
 
-    # Create placeholders for dynamic content
+   # Create placeholders for dynamic content
     question_placeholder = st.empty()
     answer_placeholder = st.empty()
-    keywords_placeholder = st.empty()
-    documents_placeholder = st.empty()
+    keywords_container = st.container()
+    documents_container = st.container()
 
     if 'trigger_query' in st.session_state and st.session_state.trigger_query:
         with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
@@ -401,25 +401,27 @@ def main():
         # Run the streaming response
         asyncio.run(display_streaming_response())
         
-        keywords_placeholder.subheader("Related Keywords:")
-        keywords_placeholder.write(", ".join(st.session_state.current_keywords))
+        with keywords_container:
+            st.subheader("Related Keywords:")
+            st.write(", ".join(st.session_state.current_keywords))
         
-        documents_placeholder.subheader("Related Documents:")
-        displayed_docs = set()
-        for intent, data in st.session_state.current_intent_data.items():
-            for score, doc in data['db_results']:
-                if doc[0] not in displayed_docs:
-                    displayed_docs.add(doc[0])
-                    with documents_placeholder.expander(f"Document: {doc[1]}"):
-                        st.write(f"ID: {doc[0]}")
-                        st.write(f"Title: {doc[1]}")
-                        st.write(f"Tags: {doc[2]}")
-                        st.write(f"Link: {doc[3]}")
-                        
-                        highlighted_tags = doc[2]
-                        for keyword in st.session_state.current_keywords:
-                            highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
-                        st.markdown(f"Matched Tags: {highlighted_tags}")
+        with documents_container:
+            st.subheader("Related Documents:")
+            displayed_docs = set()
+            for intent, data in st.session_state.current_intent_data.items():
+                for score, doc in data['db_results']:
+                    if doc[0] not in displayed_docs:
+                        displayed_docs.add(doc[0])
+                        with st.expander(f"Document: {doc[1]}"):
+                            st.write(f"ID: {doc[0]}")
+                            st.write(f"Title: {doc[1]}")
+                            st.write(f"Tags: {doc[2]}")
+                            st.write(f"Link: {doc[3]}")
+                            
+                            highlighted_tags = doc[2]
+                            for keyword in st.session_state.current_keywords:
+                                highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
+                            st.markdown(f"Matched Tags: {highlighted_tags}")
 
         # Add to chat history
         if 'chat_history' not in st.session_state:
