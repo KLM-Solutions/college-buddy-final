@@ -332,7 +332,7 @@ def main():
                 for chunk in stream:
                     st.write(f"Debug: Chunk type: {type(chunk)}")
                     st.write(f"Debug: Chunk content: {chunk}")
-                   if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+                    if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
                     content = chunk.choices[0].delta.content
                     if content is not None:
                         full_answer += content
