@@ -363,13 +363,11 @@ def main():
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
 
-    if st.button("Get Answer"):
-        if user_query:
-            st.session_state.current_question = user_query
-            st.session_state.trigger_query = True
-            st.session_state.show_answer = False
-        elif 'current_question' not in st.session_state:
-            st.warning("Please enter a question or select a popular question before searching.")
+    if user_query and user_query != st.session_state.get('last_query', ''):
+        st.session_state.current_question = user_query
+        st.session_state.trigger_query = True
+        st.session_state.show_answer = False
+        st.session_state.last_query = user_query
 
     # Create placeholders for dynamic content
     question_placeholder = st.empty()
@@ -378,10 +376,9 @@ def main():
     documents_placeholder = st.empty()
 
     if 'trigger_query' in st.session_state and st.session_state.trigger_query:
-        with st.spinner("Generating answer..."):
-            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                answer, intent_data, keywords = get_answer(st.session_state.current_question)
-                run.end(outputs={"answer": answer})
+        with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+            answer, intent_data, keywords = get_answer(st.session_state.current_question)
+            run.end(outputs={"answer": answer})
         
         st.session_state.current_answer = answer
         st.session_state.current_keywords = keywords
@@ -399,8 +396,7 @@ def main():
         # Use asyncio to run the streaming response
         async def display_streaming_response():
             async for response_buffer in stream_formatted_response(formatted_chunks):
-                answer_placeholder.markdown(response_buffer + "▌")
-            answer_placeholder.markdown(response_buffer)
+                answer_placeholder.markdown(response_buffer)
         
         # Run the streaming response
         asyncio.run(display_streaming_response())
