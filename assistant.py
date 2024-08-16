@@ -318,59 +318,58 @@ def main():
         elif 'current_question' not in st.session_state:
             st.warning("Please enter a question or select a popular question before searching.")
 
-    if 'current_question' in st.session_state:
-        with st.spinner("Searching for the best answer..."):
-            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                stream, intent_data, keywords = get_answer(st.session_state.current_question)
-                
-                st.subheader("Question:")
-                st.write(st.session_state.current_question)
-                st.subheader("Answer:")
-                
-                answer_placeholder = st.empty()
-                full_answer = ""
-                for chunk in stream:
-                    st.write(f"Debug: Chunk type: {type(chunk)}")
-                    st.write(f"Debug: Chunk content: {chunk}")
-                    if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
+   if 'current_question' in st.session_state:
+    with st.spinner("Searching for the best answer..."):
+        with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+            stream, intent_data, keywords = get_answer(st.session_state.current_question)
+            
+            st.subheader("Question:")
+            st.write(st.session_state.current_question)
+            st.subheader("Answer:")
+            
+            answer_placeholder = st.empty()
+            full_answer = ""
+            for chunk in stream:
+                st.write(f"Debug: Chunk type: {type(chunk)}")
+                st.write(f"Debug: Chunk content: {chunk}")
+                if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
                     content = chunk.choices[0].delta.content
-                       if content is not None:
+                    if content is not None:
                         full_answer += content
                         answer_placeholder.markdown(full_answer + "▌")
                 else:
                     st.write(f"Debug: Unexpected chunk structure: {chunk}")
-                answer_placeholder.markdown(full_answer)
-                
-                run.end(outputs={"answer": full_answer})
+            answer_placeholder.markdown(full_answer)
             
-            st.subheader("Related Keywords:")
-            st.write(", ".join(keywords))
-            
-            st.subheader("Related Documents:")
-            displayed_docs = set()
-            for intent, data in intent_data.items():
-                for score, doc in data['db_results']:
-                    if doc[0] not in displayed_docs:
-                        displayed_docs.add(doc[0])
-                        with st.expander(f"Document: {doc[1]}"):
-                            st.write(f"ID: {doc[0]}")
-                            st.write(f"Title: {doc[1]}")
-                            st.write(f"Tags: {doc[2]}")
-                            st.write(f"Link: {doc[3]}")
-                            
-                            highlighted_tags = doc[2]
-                            for keyword in keywords:
-                                highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
-                            st.markdown(f"Matched Tags: {highlighted_tags}")
-  
-        # Add to chat history
-        if 'chat_history' not in st.session_state:
-            st.session_state.chat_history = []
-        st.session_state.chat_history.append((st.session_state.current_question, full_answer))
+            run.end(outputs={"answer": full_answer})
         
-        # Clear the current question
-        del st.session_state.current_question
+        st.subheader("Related Keywords:")
+        st.write(", ".join(keywords))
+        
+        st.subheader("Related Documents:")
+        displayed_docs = set()
+        for intent, data in intent_data.items():
+            for score, doc in data['db_results']:
+                if doc[0] not in displayed_docs:
+                    displayed_docs.add(doc[0])
+                    with st.expander(f"Document: {doc[1]}"):
+                        st.write(f"ID: {doc[0]}")
+                        st.write(f"Title: {doc[1]}")
+                        st.write(f"Tags: {doc[2]}")
+                        st.write(f"Link: {doc[3]}")
+                        
+                        highlighted_tags = doc[2]
+                        for keyword in keywords:
+                            highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
+                        st.markdown(f"Matched Tags: {highlighted_tags}")
 
+    # Add to chat history
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    st.session_state.chat_history.append((st.session_state.current_question, full_answer))
+    
+    # Clear the current question
+    del st.session_state.current_question
     # Add a section for displaying recent questions and answers
     if 'chat_history' in st.session_state and st.session_state.chat_history:
         st.header("Recent Questions and Answers")
