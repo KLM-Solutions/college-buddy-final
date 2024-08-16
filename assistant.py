@@ -387,7 +387,7 @@ def main():
         # Use asyncio to run the streaming response
         async def display_streaming_response():
             async for response_buffer in stream_formatted_response(formatted_chunks):
-               
+                response_placeholder.markdown(response_buffer + "▌")
             response_placeholder.markdown(response_buffer)
         
         # Run the streaming response
