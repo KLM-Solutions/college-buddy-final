@@ -358,6 +358,7 @@ def main():
         if st.button(question, key=question):
             st.session_state.current_question = question
             st.session_state.trigger_query = True
+            st.session_state.show_answer = False
 
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
@@ -366,60 +367,68 @@ def main():
         if user_query:
             st.session_state.current_question = user_query
             st.session_state.trigger_query = True
+            st.session_state.show_answer = False
         elif 'current_question' not in st.session_state:
             st.warning("Please enter a question or select a popular question before searching.")
 
+    # Create placeholders for dynamic content
+    question_placeholder = st.empty()
+    answer_placeholder = st.empty()
+    keywords_placeholder = st.empty()
+    documents_placeholder = st.empty()
+
     if 'trigger_query' in st.session_state and st.session_state.trigger_query:
-        with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-            answer, intent_data, keywords = get_answer(st.session_state.current_question)
-            run.end(outputs={"answer": answer})
+        with st.spinner("Generating answer..."):
+            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+                answer, intent_data, keywords = get_answer(st.session_state.current_question)
+                run.end(outputs={"answer": answer})
         
-        st.subheader("Question:")
-        st.write(st.session_state.current_question)
-        st.subheader("Answer:")
+        st.session_state.current_answer = answer
+        st.session_state.current_keywords = keywords
+        st.session_state.current_intent_data = intent_data
+        st.session_state.show_answer = True
+        st.session_state.trigger_query = False
+
+    if 'show_answer' in st.session_state and st.session_state.show_answer:
+        question_placeholder.subheader("Question:")
+        question_placeholder.write(st.session_state.current_question)
         
-        # Format the answer
-        formatted_chunks = format_response(answer)
-        
-        # Create a placeholder for the streaming response
-        response_placeholder = st.empty()
+        answer_placeholder.subheader("Answer:")
+        formatted_chunks = format_response(st.session_state.current_answer)
         
         # Use asyncio to run the streaming response
         async def display_streaming_response():
             async for response_buffer in stream_formatted_response(formatted_chunks):
-                response_placeholder.markdown(response_buffer + "▌")
-            response_placeholder.markdown(response_buffer)
+                answer_placeholder.markdown(response_buffer + "▌")
+            answer_placeholder.markdown(response_buffer)
         
         # Run the streaming response
         asyncio.run(display_streaming_response())
         
-        st.subheader("Related Keywords:")
-        st.write(", ".join(keywords))
+        keywords_placeholder.subheader("Related Keywords:")
+        keywords_placeholder.write(", ".join(st.session_state.current_keywords))
         
-        st.subheader("Related Documents:")
+        documents_placeholder.subheader("Related Documents:")
         displayed_docs = set()
-        for intent, data in intent_data.items():
+        for intent, data in st.session_state.current_intent_data.items():
             for score, doc in data['db_results']:
                 if doc[0] not in displayed_docs:
                     displayed_docs.add(doc[0])
-                    with st.expander(f"Document: {doc[1]}"):
+                    with documents_placeholder.expander(f"Document: {doc[1]}"):
                         st.write(f"ID: {doc[0]}")
                         st.write(f"Title: {doc[1]}")
                         st.write(f"Tags: {doc[2]}")
                         st.write(f"Link: {doc[3]}")
                         
                         highlighted_tags = doc[2]
-                        for keyword in keywords:
+                        for keyword in st.session_state.current_keywords:
                             highlighted_tags = highlighted_tags.replace(keyword, f"**{keyword}**")
                         st.markdown(f"Matched Tags: {highlighted_tags}")
 
         # Add to chat history
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
-        st.session_state.chat_history.append((st.session_state.current_question, answer))
-        
-        # Reset the trigger
-        st.session_state.trigger_query = False
+        st.session_state.chat_history.append((st.session_state.current_question, st.session_state.current_answer))
 
     # Add a section for displaying recent questions and answers
     if 'chat_history' in st.session_state and st.session_state.chat_history:
