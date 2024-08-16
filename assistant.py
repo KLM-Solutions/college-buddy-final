@@ -314,7 +314,6 @@ async def stream_formatted_response(formatted_chunks: List[Tuple[str, str]]):
             yield response_buffer
             await asyncio.sleep(0.5)
 
-# Streamlit Interface
 def main():
     st.set_page_config(page_title="College Buddy Assistant", layout="wide")
 
@@ -329,7 +328,7 @@ def main():
     init_db(conn)
     load_initial_data()
 
-   # Sidebar for file upload and metadata
+    # Sidebar for file upload and metadata
     with st.sidebar:
         st.header("Upload Documents")
         uploaded_files = st.file_uploader("Upload the Word Documents (DOCX)", type="docx", accept_multiple_files=True)
@@ -358,7 +357,7 @@ def main():
     for question in st.session_state.selected_questions:
         if st.button(question, key=question):
             st.session_state.current_question = question
-            st.experimental_rerun()  # Rerun the script to clear previous output
+            st.session_state.trigger_query = True
 
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
@@ -366,11 +365,11 @@ def main():
     if st.button("Get Answer"):
         if user_query:
             st.session_state.current_question = user_query
-            st.experimental_rerun()  # Rerun the script to clear previous output
+            st.session_state.trigger_query = True
         elif 'current_question' not in st.session_state:
             st.warning("Please enter a question or select a popular question before searching.")
 
-    if 'current_question' in st.session_state:
+    if 'trigger_query' in st.session_state and st.session_state.trigger_query:
         with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
             answer, intent_data, keywords = get_answer(st.session_state.current_question)
             run.end(outputs={"answer": answer})
@@ -388,7 +387,7 @@ def main():
         # Use asyncio to run the streaming response
         async def display_streaming_response():
             async for response_buffer in stream_formatted_response(formatted_chunks):
-                response_placeholder.markdown(response_buffer + "▌")
+               
             response_placeholder.markdown(response_buffer)
         
         # Run the streaming response
@@ -419,8 +418,8 @@ def main():
             st.session_state.chat_history = []
         st.session_state.chat_history.append((st.session_state.current_question, answer))
         
-        # Clear the current question
-        del st.session_state.current_question
+        # Reset the trigger
+        st.session_state.trigger_query = False
 
     # Add a section for displaying recent questions and answers
     if 'chat_history' in st.session_state and st.session_state.chat_history:
