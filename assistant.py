@@ -358,6 +358,7 @@ def main():
         if st.button(question, key=question):
             st.session_state.current_question = question
             st.session_state.trigger_query = True
+            st.session_state.answer_generated = False
 
     st.header("Ask Your Own Question")
     
@@ -365,33 +366,28 @@ def main():
     if 'query_input' not in st.session_state:
         st.session_state.query_input = ''
 
-    # Function to clear input and reset query state
-    def clear_input_and_state():
-        st.session_state.query_input = ''
-        st.session_state.current_question = None
-        st.session_state.current_answer = None
-        st.session_state.current_keywords = None
-        st.session_state.current_intent_data = None
-        st.session_state.answer_generated = False
+    # Function to process query and clear input
+    def process_query():
+        if st.session_state.query_input:
+            st.session_state.current_question = st.session_state.query_input
+            st.session_state.trigger_query = True
+            st.session_state.answer_generated = False
+            st.session_state.query_input = ''  # Clear the input box
 
     # Text input for user query
     user_query = st.text_input("What would you like to know about the uploaded documents?", 
                                key="query_input", 
-                               on_change=clear_input_and_state)
-
-    if user_query and user_query != st.session_state.get('last_query', ''):
-        st.session_state.current_question = user_query
-        st.session_state.trigger_query = True
-        st.session_state.last_query = user_query
+                               on_change=process_query)
 
     # Create placeholder for dynamic content
     content_placeholder = st.empty()
 
     if 'trigger_query' in st.session_state and st.session_state.trigger_query and not st.session_state.get('answer_generated', False):
         with content_placeholder.container():
-            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                answer, intent_data, keywords = get_answer(st.session_state.current_question)
-                run.end(outputs={"answer": answer})
+            with st.spinner("Generating answer..."):
+                with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+                    answer, intent_data, keywords = get_answer(st.session_state.current_question)
+                    run.end(outputs={"answer": answer})
             
             st.session_state.current_answer = answer
             st.session_state.current_keywords = keywords
@@ -421,11 +417,12 @@ def main():
                         response_buffer += f"{'#' * level} {text}\n\n"
                     elif chunk_type == "text":
                         response_buffer += f"{content}\n\n"
-                    st.markdown(response_buffer)
                     await asyncio.sleep(0.1)
+                return response_buffer
             
-            # Run the streaming response
-            asyncio.run(display_streaming_response())
+            # Run the streaming response and display it once
+            final_response = asyncio.run(display_streaming_response())
+            st.markdown(final_response)
             
             st.markdown("## Related Keywords:")
             st.write(", ".join(st.session_state.current_keywords))
