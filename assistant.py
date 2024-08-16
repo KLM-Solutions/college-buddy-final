@@ -17,6 +17,8 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import HumanMessage, SystemMessage
 from langchain.callbacks import get_openai_callback
 from dotenv import load_dotenv
+import asyncio
+from typing import AsyncIterable
 
 # Load environment variables
 load_dotenv()
@@ -37,9 +39,9 @@ os.environ["LANGCHAIN_PROJECT"] = "College-Buddy-Assistant"
 # Initialize clients
 pc = Pinecone(api_key=PINECONE_API_KEY)
 langsmith_client = Client(api_key=LANGCHAIN_API_KEY)
-chat = ChatOpenAI(model_name="gpt-4", temperature=0.3, streaming=True)
+chat = ChatOpenAI(model_name="gpt-4", temperature=0.3)
 embeddings = OpenAIEmbeddings()
-client = OpenAI(api_key=OPENAI_API_KEY)
+
 # Create or connect to the Pinecone index
 if INDEX_NAME not in pc.list_indexes().names():
     pc.create_index(
@@ -80,7 +82,7 @@ def load_initial_data():
     conn = get_database_connection()
     data = [
         (1, "TEXAS TECH", "Universities, Texas Tech University, College Life, Student Wellness, Financial Tips for Students, Campus Activities, Study Strategies", "https://www.ttu.edu/"),
-        # Add more initial data as needed
+        # ... (rest of the initial data)
     ]
     c = conn.cursor()
     c.executemany("INSERT OR REPLACE INTO documents (id, title, tags, links) VALUES (?, ?, ?, ?)", data)
@@ -220,14 +222,13 @@ def query_for_multiple_intents(intent_keywords):
         }
     return intent_data
 
-
 @safe_run_tree(name="generate_multi_intent_answer", run_type="llm")
 def generate_multi_intent_answer(query, intent_data):
     context = "\n".join([f"Intent: {intent}\nDB Results: {data['db_results']}\nPinecone Context: {data['pinecone_context']}" for intent, data in intent_data.items()])
     max_context_tokens = 4000
     truncated_context = truncate_text(context, max_context_tokens)
     
-    system_message = """You are College Buddy, an AI assistant designed to help students with their academic queries. Your primary function is to analyze and provide insights based on the context of uploaded documents. Please adhere to the following guidelines:
+    system_message = SystemMessage(content="""You are College Buddy, an AI assistant designed to help students with their academic queries. Your primary function is to analyze and provide insights based on the context of uploaded documents. Please adhere to the following guidelines:
 1. Focus on addressing the primary intent of the query.
 2. Provide accurate, relevant information derived from the provided context.
 3. If the context doesn't contain sufficient information to answer the query, state this clearly.
@@ -237,23 +238,14 @@ def generate_multi_intent_answer(query, intent_data):
 7. Encourage critical thinking by guiding students towards understanding rather than simply providing direct answers.
 8. Respect academic integrity by not writing essays or completing assignments on behalf of students.
 9. Suggest additional resources only if directly relevant to the primary query.
-"""
-    human_message = f"Query: {query}\n\nContext: {truncated_context}"
+""")
+    human_message = HumanMessage(content=f"Query: {query}\n\nContext: {truncated_context}")
     
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": human_message}
-    ]
+    with get_openai_callback() as cb:
+        response = chat([system_message, human_message])
     
-    stream = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        stream=True
-    )
-    
-    for chunk in stream:
-        if chunk.choices[0].delta.content is not None:
-            yield chunk.choices[0].delta.content
+    return response.content.strip()
+
 @safe_run_tree(name="extract_keywords_from_response", run_type="llm")
 def extract_keywords_from_response(response):
     system_message = SystemMessage(content="You are a keyword extraction assistant. Extract key terms or phrases from the given text.")
@@ -265,19 +257,26 @@ def extract_keywords_from_response(response):
     keywords = keyword_response.content.strip().split(',')
     return [keyword.strip() for keyword in keywords]
 
-
 @safe_run_tree(name="get_answer", run_type="chain")
 def get_answer(query):
     intents = identify_intents(query)
     intent_keywords = generate_keywords_per_intent(intents)
     intent_data = query_for_multiple_intents(intent_keywords)
+    initial_answer = generate_multi_intent_answer(query, intent_data)
     
-    response_keywords = []
+    response_keywords = extract_keywords_from_response(initial_answer)
     all_keywords = list(set(intent_keywords[intents[0]] + response_keywords))
     
     expanded_intent_data = query_for_multiple_intents({query: all_keywords})
+    final_answer = generate_multi_intent_answer(query, expanded_intent_data)
     
-    return generate_multi_intent_answer(query, expanded_intent_data), expanded_intent_data, all_keywords
+    return final_answer, expanded_intent_data, all_keywords
+
+async def generate_streaming_response(answer: str) -> AsyncIterable[str]:
+    words = answer.split()
+    for word in words:
+        yield word + " "
+        await asyncio.sleep(0.05)  # Adjust the delay as needed
 
 # Streamlit Interface
 def main():
@@ -327,28 +326,35 @@ def main():
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
 
+   if st.button("Get Answer"):
+        if user_query:
+            st.session_state.current_question = user_query
+        elif 'current_question' not in st.session_state:
+            st.warning("Please enter a question or select a popular question before searching.")
+
     if 'current_question' in st.session_state:
         with st.spinner("Searching for the best answer..."):
             with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                answer_generator, intent_data, keywords = get_answer(st.session_state.current_question)
-                
-                st.subheader("Question:")
-                st.write(st.session_state.current_question)
-                st.subheader("Answer:")
-                
-                # Create a placeholder for the streaming answer
-                answer_placeholder = st.empty()
-                full_answer = ""
-                
-                # Stream the answer
-                for chunk in answer_generator:
-                    full_answer += chunk
-                    answer_placeholder.markdown(full_answer + "▌")
-                
-                # Display the final answer without the cursor
-                answer_placeholder.markdown(full_answer)
-                
-                run.end(outputs={"answer": full_answer})
+                answer, intent_data, keywords = get_answer(st.session_state.current_question)
+                run.end(outputs={"answer": answer})
+            
+            st.subheader("Question:")
+            st.write(st.session_state.current_question)
+            st.subheader("Answer:")
+            
+            # Create a placeholder for the streaming response
+            response_placeholder = st.empty()
+            
+            # Use asyncio to run the streaming response
+            async def display_streaming_response():
+                full_response = ""
+                async for word in generate_streaming_response(answer):
+                    full_response += word
+                    response_placeholder.markdown(full_response + "▌")
+                response_placeholder.markdown(full_response)
+            
+            # Run the streaming response
+            asyncio.run(display_streaming_response())
             
             st.subheader("Related Keywords:")
             st.write(", ".join(keywords))
@@ -373,7 +379,7 @@ def main():
         # Add to chat history
         if 'chat_history' not in st.session_state:
             st.session_state.chat_history = []
-        st.session_state.chat_history.append((st.session_state.current_question, full_answer))
+        st.session_state.chat_history.append((st.session_state.current_question, answer))
         
         # Clear the current question
         del st.session_state.current_question
