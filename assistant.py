@@ -334,7 +334,7 @@ def main():
                     st.write(f"Debug: Chunk content: {chunk}")
                     if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
                     content = chunk.choices[0].delta.content
-                    if content is not None:
+                       if content is not None:
                         full_answer += content
                         answer_placeholder.markdown(full_answer + "▌")
                 else:
