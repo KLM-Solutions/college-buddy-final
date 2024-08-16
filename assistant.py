@@ -239,7 +239,11 @@ def generate_multi_intent_answer(query, intent_data):
 """)
     human_message = HumanMessage(content=f"Query: {query}\n\nContext: {truncated_context}")
     
-    return chat.stream([system_message, human_message])
+    messages = [system_message, human_message]
+    
+    for chunk in chat.stream(messages):
+        if chunk.choices[0].delta.content is not None:
+            yield chunk.choices[0].delta.content
 
 @safe_run_tree(name="extract_keywords_from_response", run_type="llm")
 def extract_keywords_from_response(response):
@@ -257,9 +261,13 @@ def get_answer(query):
     intents = identify_intents(query)
     intent_keywords = generate_keywords_per_intent(intents)
     intent_data = query_for_multiple_intents(intent_keywords)
-    stream = generate_multi_intent_answer(query, intent_data)
     
-    return stream, intent_data, intent_keywords[intents[0]]
+    response_keywords = []
+    all_keywords = list(set(intent_keywords[intents[0]] + response_keywords))
+    
+    expanded_intent_data = query_for_multiple_intents({query: all_keywords})
+    
+    return generate_multi_intent_answer(query, expanded_intent_data), expanded_intent_data, all_keywords
 
 # Streamlit Interface
 def main():
@@ -309,44 +317,25 @@ def main():
     st.header("Ask Your Own Question")
     user_query = st.text_input("What would you like to know about the uploaded documents?")
 
-    if st.button("Get Answer"):
-        if user_query:
-            st.session_state.current_question = user_query
-        elif 'current_question' not in st.session_state:
-            st.warning("Please enter a question or select a popular question before searching.")
-
     if 'current_question' in st.session_state:
         with st.spinner("Searching for the best answer..."):
             with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                stream, intent_data, keywords = get_answer(st.session_state.current_question)
+                answer_generator, intent_data, keywords = get_answer(st.session_state.current_question)
                 
                 st.subheader("Question:")
                 st.write(st.session_state.current_question)
                 st.subheader("Answer:")
                 
+                # Create a placeholder for the streaming answer
                 answer_placeholder = st.empty()
                 full_answer = ""
-                for chunk in stream:
-                    st.write(f"Debug: Chunk type: {type(chunk)}")
-                    st.write(f"Debug: Chunk content: {chunk}")
-                    
-                    # Try to extract content from different possible structures
-                    content = None
-                    if hasattr(chunk, 'choices') and chunk.choices:
-                        choice = chunk.choices[0]
-                        if hasattr(choice, 'delta'):
-                            content = choice.delta.get('content')
-                        elif hasattr(choice, 'text'):
-                            content = choice.text
-                    elif isinstance(chunk, dict):
-                        content = chunk.get('choices', [{}])[0].get('delta', {}).get('content')
-                    
-                    if content:
-                        full_answer += content
-                        answer_placeholder.markdown(full_answer + "▌")
-                    else:
-                        st.write(f"Debug: Unable to extract content from chunk")
                 
+                # Stream the answer
+                for chunk in answer_generator:
+                    full_answer += chunk
+                    answer_placeholder.markdown(full_answer + "▌")
+                
+                # Display the final answer without the cursor
                 answer_placeholder.markdown(full_answer)
                 
                 run.end(outputs={"answer": full_answer})
@@ -385,24 +374,6 @@ def main():
         for i, (q, a) in enumerate(reversed(st.session_state.chat_history[-5:])):
             with st.expander(f"Q: {q}"):
                 st.write(f"A: {a}")
-
-    # Add feedback system
-    def add_feedback_system():
-        st.subheader("Was this answer helpful?")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("👍 Yes"):
-                st.success("Thank you for your feedback!")
-                # You could log positive feedback here
-        with col2:
-            if st.button("👎 No"):
-                st.warning("We're sorry the answer wasn't helpful.")
-                feedback = st.text_area("Please let us know how we can improve:")
-                if st.button("Submit Feedback"):
-                    # You could log the feedback here
-                    st.success("Thank you for your feedback!")
-
-    add_feedback_system()
 
 if __name__ == "__main__":
     with trace(name="College_Buddy_Assistant", client=langsmith_client) as root_run:
