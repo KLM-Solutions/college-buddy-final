@@ -316,32 +316,43 @@ def main():
             st.session_state.current_question = user_query
         elif 'current_question' not in st.session_state:
             st.warning("Please enter a question or select a popular question before searching.")
-
     if 'current_question' in st.session_state:
-        with st.spinner("Searching for the best answer..."):
-            with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
-                stream, intent_data, keywords = get_answer(st.session_state.current_question)
-                
-                st.subheader("Question:")
-                st.write(st.session_state.current_question)
-                st.subheader("Answer:")
-                
-                answer_placeholder = st.empty()
-                full_answer = ""
-                for chunk in stream:
-                    st.write(f"Debug: Chunk type: {type(chunk)}")
-                    st.write(f"Debug: Chunk content: {chunk}")
-                    if hasattr(chunk.choices[0], 'delta') and hasattr(chunk.choices[0].delta, 'content'):
-                        content = chunk.choices[0].delta.content
-                        if content is not None:
-                            full_answer += content
-                            answer_placeholder.markdown(full_answer + "▌")
-                    else:
-                        st.write(f"Debug: Unexpected chunk structure: {chunk}")
-                answer_placeholder.markdown(full_answer)
-                
-                run.end(outputs={"answer": full_answer})
+    with st.spinner("Searching for the best answer..."):
+        with trace(name="process_query", run_type="chain", client=langsmith_client) as run:
+            stream, intent_data, keywords = get_answer(st.session_state.current_question)
             
+            st.subheader("Question:")
+            st.write(st.session_state.current_question)
+            st.subheader("Answer:")
+            
+            answer_placeholder = st.empty()
+            full_answer = ""
+            for chunk in stream:
+                st.write(f"Debug: Chunk type: {type(chunk)}")
+                st.write(f"Debug: Chunk content: {chunk}")
+                
+                # Try to extract content from different possible structures
+                content = None
+                if hasattr(chunk, 'choices') and chunk.choices:
+                    choice = chunk.choices[0]
+                    if hasattr(choice, 'delta'):
+                        content = choice.delta.get('content')
+                    elif hasattr(choice, 'text'):
+                        content = choice.text
+                elif isinstance(chunk, dict):
+                    content = chunk.get('choices', [{}])[0].get('delta', {}).get('content')
+                
+                if content:
+                    full_answer += content
+                    answer_placeholder.markdown(full_answer + "▌")
+                else:
+                    st.write(f"Debug: Unable to extract content from chunk")
+            
+            answer_placeholder.markdown(full_answer)
+            
+            run.end(outputs={"answer": full_answer})
+        
+       
             st.subheader("Related Keywords:")
             st.write(", ".join(keywords))
             
