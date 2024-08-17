@@ -287,32 +287,26 @@ def format_response(answer: str) -> List[Tuple[str, str]]:
         else:  # Regular text
             formatted_chunks.append(("text", line.strip()))
     return formatted_chunks
-
 async def stream_formatted_response(formatted_chunks: List[Tuple[str, str]]):
     response_buffer = ""
     for chunk_type, content in formatted_chunks:
-        if chunk_type == "bullet":
-            response_buffer += f"- {content}\n"
-            yield response_buffer
-            await asyncio.sleep(0.25) 
-        elif chunk_type == "number":
+        if chunk_type in ["bullet", "number", "header"]:
             response_buffer += f"{content}\n"
+            if chunk_type == "header":
+                response_buffer += "\n"
             yield response_buffer
-            await asyncio.sleep(0.25)  
-        elif chunk_type == "header":
-            level, text = content
-            response_buffer += f"{'#' * level} {text}\n\n"
-            yield response_buffer
-            await asyncio.sleep(0.25)  
+            await asyncio.sleep(0.05)  # Reduced to 0.05 seconds
         elif chunk_type == "text":
             words = content.split()
-            for word in words:
-                response_buffer += f"{word} "
+            for i in range(0, len(words), 5):  # Process 5 words at a time
+                word_chunk = " ".join(words[i:i+5])
+                response_buffer += f"{word_chunk} "
                 yield response_buffer
-                await asyncio.sleep(0.05)  
+                await asyncio.sleep(0.01)  # Reduced to 0.01 seconds per 5 words
             response_buffer += "\n\n"
             yield response_buffer
-            await asyncio.sleep(0.25)  
+            await asyncio.sleep(0.05)  # Reduced to 0.05 seconds between paragraphs
+
 def main():
     st.set_page_config(page_title="College Buddy Assistant", layout="wide")
 
