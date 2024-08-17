@@ -294,26 +294,25 @@ async def stream_formatted_response(formatted_chunks: List[Tuple[str, str]]):
         if chunk_type == "bullet":
             response_buffer += f"- {content}\n"
             yield response_buffer
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.25) 
         elif chunk_type == "number":
             response_buffer += f"{content}\n"
             yield response_buffer
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.25)  
         elif chunk_type == "header":
             level, text = content
             response_buffer += f"{'#' * level} {text}\n\n"
             yield response_buffer
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.25)  
         elif chunk_type == "text":
             words = content.split()
             for word in words:
                 response_buffer += f"{word} "
                 yield response_buffer
-                await asyncio.sleep(0.1)  # Slowed down to 0.1 seconds per word
+                await asyncio.sleep(0.05)  
             response_buffer += "\n\n"
             yield response_buffer
-            await asyncio.sleep(0.5)
-
+            await asyncio.sleep(0.25)  
 def main():
     st.set_page_config(page_title="College Buddy Assistant", layout="wide")
 
