@@ -40,7 +40,7 @@ os.environ["LANGCHAIN_PROJECT"] = "College-Buddy-Assistant"
 # Initialize clients
 pc = Pinecone(api_key=PINECONE_API_KEY)
 langsmith_client = Client(api_key=LANGCHAIN_API_KEY)
-chat = ChatOpenAI(model_name="gpt-4", temperature=0.3)
+chat = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.3)
 embeddings = OpenAIEmbeddings()
 
 # Create or connect to the Pinecone index
